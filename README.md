@@ -1,13 +1,22 @@
 # CS2 Demo Analyzer
 
-A Python tool for analyzing Counter-Strike 2 (CS2) demo files to extract team tendencies and strategic patterns.
+A Python tool for analyzing Counter-Strike 2 (CS2) demo files to generate comprehensive team scouting reports with strategic patterns and tendencies.
 
 ## Features
 
-- **T-Side Analysis**: Bombsite preferences, pistol round behaviors, entry fragger patterns
-- **CT-Side Analysis**: Site stacking patterns, push locations and timings
-- **Utility Analysis**: Landing spot clustering for smokes, flashes, molotovs, and HE grenades
-- **Strategic Insights**: Economy patterns, round timing, and strategy success correlation
+- **Team Identification**: Automatically identifies the common team across multiple demo files
+- **Map-Specific Analysis**: Generates separate scouting reports for each map
+- **T-Side Analysis**: 
+  - Bombsite preferences and win rates per site
+  - Plant rate and post-plant success
+  - Entry fragging patterns
+  - Utility usage breakdown
+- **CT-Side Analysis**: 
+  - Round win rates and defensive success
+  - Retake success rates
+  - CT aggression (entry frags on defense)
+  - Utility usage patterns
+- **Comprehensive Reporting**: Generates text reports, JSON data, and CSV exports
 
 ## Requirements
 
@@ -38,13 +47,53 @@ pip install -r requirements.txt
 
 ## Usage
 
-*(Usage instructions will be updated as development progresses)*
+### Organizing Demo Files
 
-1. Place your CS2 demo files (.dem) in the `demos/` folder
-2. Run the analyzer:
+Organize your demo files by map in the `demos/` folder:
+
+```
+demos/
+  inferno/
+    match1.dem
+    match2.dem
+  nuke/
+    match1.dem
+    match2.dem
+  ancient/
+    match1.dem
+```
+
+**Important**: All demos in a map folder should contain matches with the same team. The analyzer will identify the common team across all demos in each folder.
+
+### Running the Analyzer
+
 ```bash
 python analyzer.py
 ```
+
+The analyzer will:
+1. Identify the common team across all demos in each map folder
+2. Parse all demo files and extract relevant data
+3. Analyze team tendencies on both T-side and CT-side
+4. Generate comprehensive scouting reports in the `output/` folder
+
+### Output Files
+
+For each map, the analyzer generates:
+
+- **Text Report** (`{map}_scouting_report_{timestamp}.txt`): Human-readable scouting report with:
+  - Team roster
+  - T-side statistics (win rate, bombsite preferences, utility usage)
+  - CT-side statistics (retake success, defensive patterns)
+  - Overall match statistics
+
+- **JSON Data** (`{map}_data_{timestamp}.json`): Machine-readable data for further analysis
+
+- **CSV Files** (`{map}_csv_{timestamp}/`): Raw data exports
+  - `rounds.csv`: Round-by-round results with side information
+  - `kills.csv`: All kill events with entry frag tracking
+  - `utility.csv`: All utility usage events
+  - `positions.csv`: Player position samples throughout matches
 
 ## Project Structure
 

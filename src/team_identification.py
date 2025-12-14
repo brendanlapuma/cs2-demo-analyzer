@@ -20,7 +20,10 @@ except ImportError as e:
 def identify_common_team(demo_paths: List[str], min_players: int = 4) -> Set[str]:
     """
     Identify the common team across multiple demo files by finding players
-    that appear in all (or most) demos.
+    that consistently play together on the same side.
+    
+    In CS2, each match has two teams of 5 players. This function identifies
+    which team of 5 appears consistently across multiple demos.
     
     Args:
         demo_paths: List of paths to demo files
@@ -32,8 +35,9 @@ def identify_common_team(demo_paths: List[str], min_players: int = 4) -> Set[str
     if not demo_paths:
         return set()
     
-    # Get all players from each demo
-    all_players_per_demo = []
+    # Get team compositions from each demo
+    # Each demo will have 2 teams (T and CT), we need to track which 5-player groups appear together
+    team_compositions_per_demo = []
     
     for demo_path in demo_paths:
         if not os.path.exists(demo_path):
@@ -43,21 +47,26 @@ def identify_common_team(demo_paths: List[str], min_players: int = 4) -> Set[str
             demo = Demo(demo_path)
             demo.parse()
             
-            # Get unique players from kills or ticks
-            players = set()
-            if hasattr(demo, 'kills'):
-                kills_df = demo.kills.to_pandas()
-                if 'attacker_name' in kills_df.columns:
-                    players.update(kills_df['attacker_name'].dropna().unique())
-                if 'victim_name' in kills_df.columns:
-                    players.update(kills_df['victim_name'].dropna().unique())
-            
+            # Get players and their sides from the first few rounds to identify teams
             if hasattr(demo, 'ticks'):
                 ticks_df = demo.ticks.to_pandas()
-                if 'name' in ticks_df.columns:
-                    players.update(ticks_df['name'].dropna().unique())
-            
-            all_players_per_demo.append(players)
+                
+                # Sample from early rounds to get team compositions
+                early_ticks = ticks_df[ticks_df['round_num'].isin([1, 2, 3])]
+                
+                if not early_ticks.empty and 'name' in early_ticks.columns and 'side' in early_ticks.columns:
+                    # Group players by side in the first round
+                    first_round = early_ticks[early_ticks['round_num'] == 1]
+                    
+                    # Get unique players per side
+                    t_players = set(first_round[first_round['side'].str.upper() == 'T']['name'].unique())
+                    ct_players = set(first_round[first_round['side'].str.upper() == 'CT']['name'].unique())
+                    
+                    # Store both teams (we'll figure out which is common later)
+                    if len(t_players) >= 4:  # Should be 5, but allow for 4 in case of missing data
+                        team_compositions_per_demo.append(('T', t_players))
+                    if len(ct_players) >= 4:
+                        team_compositions_per_demo.append(('CT', ct_players))
             
             del demo
             
@@ -65,31 +74,154 @@ def identify_common_team(demo_paths: List[str], min_players: int = 4) -> Set[str
             print(f"Warning: Could not parse {demo_path}: {e}")
             continue
     
-    if not all_players_per_demo:
+    if not team_compositions_per_demo:
         return set()
     
-    # Find players that appear in all demos
-    common_players = set(all_players_per_demo[0])
-    for players in all_players_per_demo[1:]:
-        common_players &= players
+    # Find which team composition appears most frequently across demos
+    # Compare each team to all others and count overlaps
+    team_overlap_scores = []
     
-    # If we found at least min_players in common, that's the team
-    if len(common_players) >= min_players:
-        return common_players
+    for i, (side_i, team_i) in enumerate(team_compositions_per_demo):
+        overlap_count = 0
+        total_overlap_players = Counter()
+        
+        for j, (side_j, team_j) in enumerate(team_compositions_per_demo):
+            if i != j:
+                overlap = team_i & team_j
+                if len(overlap) >= min_players:
+                    overlap_count += 1
+                    total_overlap_players.update(overlap)
+        
+        team_overlap_scores.append({
+            'team': team_i,
+            'overlap_count': overlap_count,
+            'consistent_players': set(player for player, count in total_overlap_players.items() 
+                                     if count >= len(demo_paths) * 0.6)
+        })
     
-    # Otherwise, find players that appear in at least 80% of demos
-    player_counts = Counter()
-    for players in all_players_per_demo:
-        player_counts.update(players)
-    
-    # Get players that appear in at least 80% of demos
-    threshold = len(demo_paths) * 0.8
-    frequent_players = {player for player, count in player_counts.items() if count >= threshold}
-    
-    if len(frequent_players) >= min_players:
-        return frequent_players
+    # Find the team with the most overlaps (appears in most demos)
+    if team_overlap_scores:
+        best_team = max(team_overlap_scores, key=lambda x: (x['overlap_count'], len(x['team'])))
+        
+        # Return the consistent players (appear in most demos with this team)
+        if best_team['consistent_players'] and len(best_team['consistent_players']) >= min_players:
+            return best_team['consistent_players']
+        elif len(best_team['team']) >= min_players:
+            return best_team['team']
     
     return set()
+
+
+def identify_all_teams(demo_paths: List[str], min_players: int = 4, min_demos: int = 2) -> List[Set[str]]:
+    """
+    Identify all teams that appear in multiple demos within a map folder.
+    
+    This function finds all teams that appear in at least min_demos demos,
+    allowing multiple teams to be analyzed if they each have multiple matches.
+    
+    Args:
+        demo_paths: List of paths to demo files
+        min_players: Minimum number of players to consider it the same team
+        min_demos: Minimum number of demos a team must appear in to be included
+        
+    Returns:
+        List of sets, where each set contains player names forming a team
+    """
+    if not demo_paths or len(demo_paths) < min_demos:
+        return []
+    
+    # Get team compositions from each demo
+    team_compositions_per_demo = []
+    
+    for demo_path in demo_paths:
+        if not os.path.exists(demo_path):
+            continue
+        
+        try:
+            demo = Demo(demo_path)
+            demo.parse()
+            
+            # Get players and their sides from the first few rounds to identify teams
+            if hasattr(demo, 'ticks'):
+                ticks_df = demo.ticks.to_pandas()
+                
+                # Sample from early rounds to get team compositions
+                early_ticks = ticks_df[ticks_df['round_num'].isin([1, 2, 3])]
+                
+                if not early_ticks.empty and 'name' in early_ticks.columns and 'side' in early_ticks.columns:
+                    # Group players by side in the first round
+                    first_round = early_ticks[early_ticks['round_num'] == 1]
+                    
+                    # Get unique players per side
+                    t_players = set(first_round[first_round['side'].str.upper() == 'T']['name'].unique())
+                    ct_players = set(first_round[first_round['side'].str.upper() == 'CT']['name'].unique())
+                    
+                    # Store both teams with their demo path for tracking
+                    if len(t_players) >= min_players:
+                        team_compositions_per_demo.append({
+                            'demo': demo_path,
+                            'team': t_players
+                        })
+                    if len(ct_players) >= min_players:
+                        team_compositions_per_demo.append({
+                            'demo': demo_path,
+                            'team': ct_players
+                        })
+            
+            del demo
+            
+        except Exception as e:
+            print(f"Warning: Could not parse {demo_path}: {e}")
+            continue
+    
+    if not team_compositions_per_demo:
+        return []
+    
+    # Group similar teams together (teams with min_players overlap)
+    team_groups = []
+    used_indices = set()
+    
+    for i, comp_i in enumerate(team_compositions_per_demo):
+        if i in used_indices:
+            continue
+        
+        # Start a new team group
+        team_group = {
+            'teams': [comp_i['team']],
+            'demos': {comp_i['demo']},
+            'all_players': comp_i['team'].copy()
+        }
+        used_indices.add(i)
+        
+        # Find all similar teams
+        for j, comp_j in enumerate(team_compositions_per_demo):
+            if j in used_indices or j <= i:
+                continue
+            
+            # Check if this team overlaps with our group
+            overlap = comp_i['team'] & comp_j['team']
+            if len(overlap) >= min_players:
+                team_group['teams'].append(comp_j['team'])
+                team_group['demos'].add(comp_j['demo'])
+                team_group['all_players'].update(comp_j['team'])
+                used_indices.add(j)
+        
+        # Only include teams that appear in multiple demos
+        if len(team_group['demos']) >= min_demos:
+            # Find the consistent players across this team's appearances
+            player_counts = Counter()
+            for team in team_group['teams']:
+                player_counts.update(team)
+            
+            # Players that appear in at least 60% of this team's matches
+            threshold = len(team_group['demos']) * 0.6
+            consistent_players = {player for player, count in player_counts.items() 
+                                 if count >= threshold}
+            
+            if len(consistent_players) >= min_players:
+                team_groups.append(consistent_players)
+    
+    return team_groups
 
 
 def determine_team_side_for_round(
