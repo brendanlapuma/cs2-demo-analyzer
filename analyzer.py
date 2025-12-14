@@ -17,7 +17,7 @@ def main():
     print("=" * 50)
     
     # Check for demo files in demos folder
-    demos_folder = Path("demos")
+    demos_folder = Path("demos/inferno")
     
     if not demos_folder.exists():
         print(f"Warning: {demos_folder} folder does not exist")

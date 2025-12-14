@@ -32,12 +32,22 @@ def analyze_bombsite_hits(rounds_df: pd.DataFrame) -> Dict:
             'error': 'No round data provided'
         }
     
-    # Filter for T-side rounds only
-    t_rounds = rounds_df[rounds_df['side'] == 'T'].copy()
+    # Filter for T-side rounds
+    # If 'side' column is populated (team-specific analysis), filter by side == 'T'
+    # If 'side' column is None/null (general analysis), analyze all rounds from T-side perspective
+    if rounds_df['side'].notna().any():
+        # Team-specific mode: Filter for rounds where the target team played T-side
+        t_rounds = rounds_df[rounds_df['side'] == 'T'].copy()
+        analysis_mode = 'team_specific'
+    else:
+        # General mode: Consider all rounds (both teams' T-side play)
+        # We'll analyze bombsite plants regardless of which team planted
+        t_rounds = rounds_df.copy()
+        analysis_mode = 'general'
     
     if t_rounds.empty:
         return {
-            'error': 'No T-side rounds found',
+            'error': 'No T-side rounds found' if analysis_mode == 'team_specific' else 'No rounds found',
             'total_t_rounds': 0
         }
     
@@ -60,7 +70,13 @@ def analyze_bombsite_hits(rounds_df: pd.DataFrame) -> Dict:
     
     for site in bombsite_counts.keys():
         site_rounds = planted_rounds[planted_rounds['bombsite'] == site]
-        wins = (site_rounds['winner'] == 'T').sum()
+        if analysis_mode == 'team_specific':
+            # Team-specific: Count wins where target team (playing T) won
+            wins = (site_rounds['winner'] == 'T').sum()
+        else:
+            # General: In general mode, count wins for whichever team planted
+            # Since we're analyzing from T-perspective, count T wins for all plants
+            wins = (site_rounds['winner'] == 'T').sum()
         bombsite_wins[site] = wins
         bombsite_win_rates[site] = (wins / len(site_rounds) * 100) if len(site_rounds) > 0 else 0
     
@@ -68,10 +84,17 @@ def analyze_bombsite_hits(rounds_df: pd.DataFrame) -> Dict:
     most_hit_site = max(bombsite_counts.items(), key=lambda x: x[1])[0] if bombsite_counts else None
     
     # Overall T-side win rate
-    t_wins = (t_rounds['winner'] == 'T').sum()
-    t_win_rate = (t_wins / len(t_rounds) * 100) if len(t_rounds) > 0 else 0
+    if analysis_mode == 'team_specific':
+        # Team-specific: T-side rounds for the target team only
+        t_wins = (t_rounds['winner'] == 'T').sum()
+        t_win_rate = (t_wins / len(t_rounds) * 100) if len(t_rounds) > 0 else 0
+    else:
+        # General: Count all T-side wins across all rounds
+        t_wins = (t_rounds['winner'] == 'T').sum()
+        t_win_rate = (t_wins / len(t_rounds) * 100) if len(t_rounds) > 0 else 0
     
     return {
+        'analysis_mode': analysis_mode,
         'total_t_rounds': len(t_rounds),
         'total_plants': total_plants,
         'plant_rate': (total_plants / len(t_rounds) * 100) if len(t_rounds) > 0 else 0,
@@ -94,6 +117,10 @@ def print_bombsite_analysis(results: Dict):
     
     print("\n" + "=" * 60)
     print("BOMBSITE HIT ANALYSIS (T-Side)")
+    if results.get('analysis_mode') == 'team_specific':
+        print("Mode: Team-Specific Analysis (Target Team's T-Side Rounds Only)")
+    else:
+        print("Mode: General Analysis (All T-Side Rounds)")
     print("=" * 60)
     
     print(f"\nTotal T-Side Rounds: {results['total_t_rounds']}")
