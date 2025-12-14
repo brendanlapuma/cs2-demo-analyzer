@@ -43,3 +43,5 @@ demos/*.dem
 *.tmp
 *.log
 convo.txt
+
+demos
