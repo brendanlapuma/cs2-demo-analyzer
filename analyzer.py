@@ -222,13 +222,13 @@ def write_text_report(output_path, team_name, map_name, demo_count, team_players
             if t_side_analysis['bombsite_stats']:
                 f.write("\nBombsite Preferences:\n")
                 f.write("-" * 80 + "\n")
-                f.write(f"{'Site':<20} {'Plants':<12} {'% of Plants':<15} {'Wins':<10} {'Win Rate'}\n")
+                f.write(f"{'Site':<20} {'Plants':<10} {'% of Plants':<15} {'Wins':<10} {'Win Rate'}\n")
                 f.write("-" * 80 + "\n")
                 
                 for site, stats in sorted(t_side_analysis['bombsite_stats'].items(), 
                                          key=lambda x: x[1]['plants'], reverse=True):
-                    f.write(f"{site:<20} {stats['plants']:<12} {stats['percentage']:<15.1f}% "
-                           f"{stats['wins']:<10} {stats['win_rate']:.1f}%\n")
+                    f.write(f"{site:<20} {stats['plants']:<10} {stats['percentage']:>6.1f}%{' ':<8} "
+                           f"{stats['wins']:<10} {stats['win_rate']:>6.1f}%\n")
             
             if t_side_analysis['kills']:
                 f.write("\nT-Side Fragging:\n")
