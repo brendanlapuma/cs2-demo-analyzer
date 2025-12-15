@@ -185,28 +185,15 @@ def extract_strategy_features(round_num: int,
             else:
                 features['utility_avg_time'] = 0
                 features['utility_first_time'] = 0
-            
-            # Utility spatial distribution
-            if 'x' in round_utility.columns and 'y' in round_utility.columns:
-                features['utility_avg_x'] = round_utility['x'].mean()
-                features['utility_avg_y'] = round_utility['y'].mean()
-            elif 'X' in round_utility.columns and 'Y' in round_utility.columns:
-                features['utility_avg_x'] = round_utility['X'].mean()
-                features['utility_avg_y'] = round_utility['Y'].mean()
-            else:
-                features['utility_avg_x'] = 0
-                features['utility_avg_y'] = 0
         else:
             features.update({
                 'smoke_count': 0, 'flash_count': 0, 'he_count': 0, 'molotov_count': 0,
-                'utility_avg_time': 0, 'utility_first_time': 0,
-                'utility_avg_x': 0, 'utility_avg_y': 0
+                'utility_avg_time': 0, 'utility_first_time': 0
             })
     else:
         features.update({
             'smoke_count': 0, 'flash_count': 0, 'he_count': 0, 'molotov_count': 0,
-            'utility_avg_time': 0, 'utility_first_time': 0,
-            'utility_avg_x': 0, 'utility_avg_y': 0
+            'utility_avg_time': 0, 'utility_first_time': 0
         })
     
     # Kill timing features
@@ -342,5 +329,9 @@ def build_feature_matrix(rounds_df: pd.DataFrame,
     
     if not features_list:
         return pd.DataFrame()
+    
+    from pprint import pprint
+    if features_list:
+        print("Feature columns:", list(features_list[0].keys()))
     
     return pd.DataFrame(features_list)
