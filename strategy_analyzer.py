@@ -22,7 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.extractors import extract_round_data, extract_utility_data, extract_player_positions, extract_kill_events
 from src.team_identification import identify_all_teams
 from src.strats import (discover_strategies, analyze_strategy_clusters, generate_strategy_report,
-                       plot_strategy_clusters, plot_feature_importance, plot_cluster_statistics)
+                       plot_strategy_clusters, plot_feature_importance, plot_cluster_statistics,
+                       generate_strategy_profiles)
 from awpy import Demo
 
 
@@ -286,6 +287,18 @@ def main():
         rounds_with_strategies,
         args.side,
         output_path=stats_path
+    )
+    
+    # Generate strategy profiles (directories with heatmaps and descriptions)
+    generate_strategy_profiles(
+        rounds_with_strategies,
+        metadata['feature_matrix'],
+        metadata['feature_names'],
+        metadata['labels'],
+        strategy_analysis,
+        args.side,
+        output_dir,
+        args.map
     )
     
     import matplotlib.pyplot as plt

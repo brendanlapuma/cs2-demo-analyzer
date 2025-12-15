@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Set
 # These will be updated dynamically based on actual position data
 MAP_X_MIN, MAP_X_MAX = -3000, 3000
 MAP_Y_MIN, MAP_Y_MAX = -3000, 3000
-GRID_SIZE = 10  # 10x10 grid (reduced from 20x20 to reduce sparsity)
+GRID_SIZE = 5  # 5x5 grid = 25 features per time period
 
 
 def positions_to_grid(positions_df: pd.DataFrame, 
@@ -124,35 +124,29 @@ def extract_strategy_features(round_num: int,
             # Time column
             time_col = 'seconds_into_round' if 'seconds_into_round' in round_positions.columns else 'seconds'
             
-            # Early positioning (first 15 seconds) - converted to 20x20 grid
-            early_pos = round_positions[round_positions[time_col] <= 15]
-            early_grid = positions_to_grid(early_pos, x_min, x_max, y_min, y_max, GRID_SIZE)
-            for i, count in enumerate(early_grid):
-                features[f'early_grid_{i}'] = count
+            # Use positions at first sample point after freeze (typically 10s after freeze end)
+            # Freeze times vary (15-26s), so we capture samples in 25-36s range
+            # This gets the first sample where players are actively moving
+            snapshot_pos = round_positions[
+                (round_positions[time_col] >= 25) & (round_positions[time_col] <= 36)
+            ]
             
-            # Mid-round positioning (15-45 seconds) - converted to 20x20 grid
-            mid_pos = round_positions[(round_positions[time_col] > 15) & (round_positions[time_col] <= 45)]
-            mid_grid = positions_to_grid(mid_pos, x_min, x_max, y_min, y_max, GRID_SIZE)
-            for i, count in enumerate(mid_grid):
-                features[f'mid_grid_{i}'] = count
+            # If no data in that window, use the last available sample
+            if len(snapshot_pos) == 0 and len(round_positions) > 0:
+                last_time = round_positions[time_col].max()
+                snapshot_pos = round_positions[round_positions[time_col] == last_time]
             
-            # Late positioning (45+ seconds) - converted to 20x20 grid
-            late_pos = round_positions[round_positions[time_col] > 45]
-            late_grid = positions_to_grid(late_pos, x_min, x_max, y_min, y_max, GRID_SIZE)
-            for i, count in enumerate(late_grid):
-                features[f'late_grid_{i}'] = count
+            snapshot_grid = positions_to_grid(snapshot_pos, x_min, x_max, y_min, y_max, GRID_SIZE)
+            for i, count in enumerate(snapshot_grid):
+                features[f'pos_grid_{i}'] = count
         else:
             # No position data - fill with zeros
             for i in range(GRID_SIZE * GRID_SIZE):
-                features[f'early_grid_{i}'] = 0
-                features[f'mid_grid_{i}'] = 0
-                features[f'late_grid_{i}'] = 0
+                features[f'pos_grid_{i}'] = 0
     else:
         # No position data - fill with zeros
         for i in range(GRID_SIZE * GRID_SIZE):
-            features[f'early_grid_{i}'] = 0
-            features[f'mid_grid_{i}'] = 0
-            features[f'late_grid_{i}'] = 0
+            features[f'pos_grid_{i}'] = 0
     
     # Utility features
     if utility_df is not None and not utility_df.empty:

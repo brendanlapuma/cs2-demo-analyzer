@@ -160,10 +160,24 @@ def extract_player_positions(demo_path: str = None, target_team: str = None, sam
             # Extract mid-round samples if interval specified
             if sample_interval is not None and round_max_tick is not None:
                 # Sample at regular intervals (in seconds, convert to ticks)
+                # Start sampling from freeze_end_tick (when players can move)
                 sample_interval_ticks = int(sample_interval * TICK_RATE)
-                current_tick = freeze_end_tick + sample_interval_ticks
                 
-                while current_tick < round_max_tick:
+                # Calculate when freeze ends relative to round start (in seconds)
+                freeze_duration_seconds = int((freeze_end_tick - start_tick) / TICK_RATE)
+                
+                # Sample at fixed intervals from freeze end: 10s, 20s, 30s, 40s, 50s...
+                # This ensures consistent timing relative to when players can move
+                sample_number = 1
+                while True:
+                    # Calculate target time in seconds from freeze_end
+                    target_seconds_from_freeze = sample_interval * sample_number
+                    # Calculate target tick
+                    current_tick = freeze_end_tick + int(target_seconds_from_freeze * TICK_RATE)
+                    
+                    if current_tick >= round_max_tick:
+                        break
+                    
                     # Find closest tick to sample time
                     sample_ticks = ticks_df[
                         (ticks_df['round_num'] == round_num) & 
@@ -198,7 +212,7 @@ def extract_player_positions(demo_path: str = None, target_team: str = None, sam
                                 'match_file': os.path.basename(demo_path_to_use) if demo_path_to_use != 'Unknown' else 'Unknown'
                             })
                     
-                    current_tick += sample_interval_ticks
+                    sample_number += 1
         
         position_df = pd.DataFrame(position_data)
         
